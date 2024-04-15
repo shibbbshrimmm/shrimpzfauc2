@@ -1,0 +1,1063 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>$SHRIMPZ Faucet</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/web3@latest/dist/web3.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@walletconnect/web3-provider@1.7.1/dist/umd/index.min.js"></script>
+  </head>
+  <body>
+    <header>
+      <h1>$SHRIMPZ Faucet</h1>
+    </header>
+    <main>
+      <button id="connectWalletBtn" onclick="connectWallet()">
+        Connect Wallet
+      </button>
+
+      <div id="actionContainer" class="actions hidden">
+        <h2>Faucet Actions</h2>
+        <button onclick="claimTokens()">Claim Tokens</button>
+        <button onclick="getCooldownTimeRemaining()">
+          Get Remaining Cooldown Time
+        </button>
+        <button onclick="getFaucetBalance()">Get Faucet Balance</button>
+      </div>
+
+      <div class="info">
+        <h2>Faucet Information</h2>
+        <div class="data-box">
+          Contract Address: 0xDC29C450627336Cb57eB88224f9764df89f47322
+        </div>
+        <div class="data-box">
+          Token Contract Address: 0x4633841377513350FAF72Efc3c6e6f94F3BDD0F8
+        </div>
+        <div class="data-box">Claim Amount: 100 $Shrimpz</div>
+        <div class="data-box">Cooldown Period: 24 hours</div>
+        <div id="messageContainer" class="message hidden">
+          <p id="messageText"></p>
+        </div>
+      </div>
+    </main>
+    <script>
+      var web3;
+      var provider;
+      var shrimpFaucetContract;
+      var shrimpTokenContract;
+      const connectWalletBtn = document.getElementById("connectWalletBtn");
+      const actionContainer = document.getElementById("actionContainer");
+      const faucetAddress = "0xDC29C450627336Cb57eB88224f9764df89f47322";
+      const tokenAddress = "0x4633841377513350FAF72Efc3c6e6f94F3BDD0F8";
+      const contractABI = [
+        {
+          inputs: [
+            {
+              internalType: "contract IERC20",
+              name: "_token",
+              type: "address",
+            },
+            {
+              internalType: "uint256",
+              name: "_ticketPrice",
+              type: "uint256",
+            },
+            {
+              internalType: "uint256",
+              name: "_maxTicketsPerAddress",
+              type: "uint256",
+            },
+            {
+              internalType: "uint256",
+              name: "_maxTickets",
+              type: "uint256",
+            },
+            {
+              internalType: "address",
+              name: "initialOwner",
+              type: "address",
+            },
+          ],
+          stateMutability: "nonpayable",
+          type: "constructor",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "target",
+              type: "address",
+            },
+          ],
+          name: "AddressEmptyCode",
+          type: "error",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "account",
+              type: "address",
+            },
+          ],
+          name: "AddressInsufficientBalance",
+          type: "error",
+        },
+        {
+          inputs: [],
+          name: "buyTicket",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address[3]",
+              name: "winners",
+              type: "address[3]",
+            },
+          ],
+          name: "distributePrizes",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "endLottery",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "FailedInnerCall",
+          type: "error",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "owner",
+              type: "address",
+            },
+          ],
+          name: "OwnableInvalidOwner",
+          type: "error",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "account",
+              type: "address",
+            },
+          ],
+          name: "OwnableUnauthorizedAccount",
+          type: "error",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "token",
+              type: "address",
+            },
+          ],
+          name: "SafeERC20FailedOperation",
+          type: "error",
+        },
+        {
+          anonymous: false,
+          inputs: [],
+          name: "LotteryEnded",
+          type: "event",
+        },
+        {
+          anonymous: false,
+          inputs: [],
+          name: "LotteryRestarted",
+          type: "event",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: true,
+              internalType: "address",
+              name: "previousOwner",
+              type: "address",
+            },
+            {
+              indexed: true,
+              internalType: "address",
+              name: "newOwner",
+              type: "address",
+            },
+          ],
+          name: "OwnershipTransferred",
+          type: "event",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: false,
+              internalType: "address",
+              name: "winner",
+              type: "address",
+            },
+            {
+              indexed: false,
+              internalType: "uint256",
+              name: "amount",
+              type: "uint256",
+            },
+          ],
+          name: "PrizeDistributed",
+          type: "event",
+        },
+        {
+          inputs: [],
+          name: "renounceOwnership",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: true,
+              internalType: "address",
+              name: "buyer",
+              type: "address",
+            },
+          ],
+          name: "TicketPurchased",
+          type: "event",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "newOwner",
+              type: "address",
+            },
+          ],
+          name: "transferOwnership",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "uint256",
+              name: "_newMaxTickets",
+              type: "uint256",
+            },
+          ],
+          name: "updateMaxTickets",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "uint256",
+              name: "_newMaxTicketsPerAddress",
+              type: "uint256",
+            },
+          ],
+          name: "updateMaxTicketsPerAddress",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "uint256",
+              name: "_newServiceFeePercentage",
+              type: "uint256",
+            },
+          ],
+          name: "updateServiceFeePercentage",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "uint256",
+              name: "_newTicketPrice",
+              type: "uint256",
+            },
+          ],
+          name: "updateTicketPrice",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "uint256",
+              name: "_newFirstPlacePercentage",
+              type: "uint256",
+            },
+            {
+              internalType: "uint256",
+              name: "_newSecondPlacePercentage",
+              type: "uint256",
+            },
+            {
+              internalType: "uint256",
+              name: "_newThirdPlacePercentage",
+              type: "uint256",
+            },
+          ],
+          name: "updateWinningTierPercentages",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "uint256",
+              name: "_amount",
+              type: "uint256",
+            },
+          ],
+          name: "withdrawEth",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "uint256",
+              name: "_amount",
+              type: "uint256",
+            },
+          ],
+          name: "withdrawTokens",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "FIRST_PLACE_PERCENTAGE",
+          outputs: [
+            {
+              internalType: "uint256",
+              name: "",
+              type: "uint256",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "lotteryEnded",
+          outputs: [
+            {
+              internalType: "bool",
+              name: "",
+              type: "bool",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "maxTickets",
+          outputs: [
+            {
+              internalType: "uint256",
+              name: "",
+              type: "uint256",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "maxTicketsPerAddress",
+          outputs: [
+            {
+              internalType: "uint256",
+              name: "",
+              type: "uint256",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "owner",
+          outputs: [
+            {
+              internalType: "address",
+              name: "",
+              type: "address",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "uint256",
+              name: "",
+              type: "uint256",
+            },
+          ],
+          name: "participants",
+          outputs: [
+            {
+              internalType: "address",
+              name: "",
+              type: "address",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "SECOND_PLACE_PERCENTAGE",
+          outputs: [
+            {
+              internalType: "uint256",
+              name: "",
+              type: "uint256",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "serviceFeePercentage",
+          outputs: [
+            {
+              internalType: "uint256",
+              name: "",
+              type: "uint256",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "THIRD_PLACE_PERCENTAGE",
+          outputs: [
+            {
+              internalType: "uint256",
+              name: "",
+              type: "uint256",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "ticketPrice",
+          outputs: [
+            {
+              internalType: "uint256",
+              name: "",
+              type: "uint256",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "",
+              type: "address",
+            },
+          ],
+          name: "ticketsPerAddress",
+          outputs: [
+            {
+              internalType: "uint256",
+              name: "",
+              type: "uint256",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "token",
+          outputs: [
+            {
+              internalType: "contract IERC20",
+              name: "",
+              type: "address",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "totalPrizePool",
+          outputs: [
+            {
+              internalType: "uint256",
+              name: "",
+              type: "uint256",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+      ];
+
+      const tokenABI = [
+        {
+          inputs: [],
+          stateMutability: "nonpayable",
+          type: "constructor",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: true,
+              internalType: "address",
+              name: "owner",
+              type: "address",
+            },
+            {
+              indexed: true,
+              internalType: "address",
+              name: "spender",
+              type: "address",
+            },
+            {
+              indexed: false,
+              internalType: "uint256",
+              name: "value",
+              type: "uint256",
+            },
+          ],
+          name: "Approval",
+          type: "event",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: true,
+              internalType: "address",
+              name: "previousOwner",
+              type: "address",
+            },
+            {
+              indexed: true,
+              internalType: "address",
+              name: "newOwner",
+              type: "address",
+            },
+          ],
+          name: "OwnershipTransferred",
+          type: "event",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: true,
+              internalType: "address",
+              name: "from",
+              type: "address",
+            },
+            {
+              indexed: true,
+              internalType: "address",
+              name: "to",
+              type: "address",
+            },
+            {
+              indexed: false,
+              internalType: "uint256",
+              name: "value",
+              type: "uint256",
+            },
+          ],
+          name: "Transfer",
+          type: "event",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "owner",
+              type: "address",
+            },
+            {
+              internalType: "address",
+              name: "spender",
+              type: "address",
+            },
+          ],
+          name: "allowance",
+          outputs: [
+            {
+              internalType: "uint256",
+              name: "",
+              type: "uint256",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "spender",
+              type: "address",
+            },
+            {
+              internalType: "uint256",
+              name: "amount",
+              type: "uint256",
+            },
+          ],
+          name: "approve",
+          outputs: [
+            {
+              internalType: "bool",
+              name: "",
+              type: "bool",
+            },
+          ],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "account",
+              type: "address",
+            },
+          ],
+          name: "balanceOf",
+          outputs: [
+            {
+              internalType: "uint256",
+              name: "",
+              type: "uint256",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "uint256",
+              name: "amount",
+              type: "uint256",
+            },
+          ],
+          name: "burn",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "decimals",
+          outputs: [
+            {
+              internalType: "uint8",
+              name: "",
+              type: "uint8",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "spender",
+              type: "address",
+            },
+            {
+              internalType: "uint256",
+              name: "subtractedValue",
+              type: "uint256",
+            },
+          ],
+          name: "decreaseAllowance",
+          outputs: [
+            {
+              internalType: "bool",
+              name: "",
+              type: "bool",
+            },
+          ],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "distributionWallet",
+          outputs: [
+            {
+              internalType: "address",
+              name: "",
+              type: "address",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "spender",
+              type: "address",
+            },
+            {
+              internalType: "uint256",
+              name: "addedValue",
+              type: "uint256",
+            },
+          ],
+          name: "increaseAllowance",
+          outputs: [
+            {
+              internalType: "bool",
+              name: "",
+              type: "bool",
+            },
+          ],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "uint256",
+              name: "amount",
+              type: "uint256",
+            },
+          ],
+          name: "mint",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "name",
+          outputs: [
+            {
+              internalType: "string",
+              name: "",
+              type: "string",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "owner",
+          outputs: [
+            {
+              internalType: "address",
+              name: "",
+              type: "address",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "renounceOwnership",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "_distributionWallet",
+              type: "address",
+            },
+          ],
+          name: "setDistributionWallet",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "symbol",
+          outputs: [
+            {
+              internalType: "string",
+              name: "",
+              type: "string",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "totalSupply",
+          outputs: [
+            {
+              internalType: "uint256",
+              name: "",
+              type: "uint256",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "recipient",
+              type: "address",
+            },
+            {
+              internalType: "uint256",
+              name: "amount",
+              type: "uint256",
+            },
+          ],
+          name: "transfer",
+          outputs: [
+            {
+              internalType: "bool",
+              name: "",
+              type: "bool",
+            },
+          ],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "sender",
+              type: "address",
+            },
+            {
+              internalType: "address",
+              name: "recipient",
+              type: "address",
+            },
+            {
+              internalType: "uint256",
+              name: "amount",
+              type: "uint256",
+            },
+          ],
+          name: "transferFrom",
+          outputs: [
+            {
+              internalType: "bool",
+              name: "",
+              type: "bool",
+            },
+          ],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "newOwner",
+              type: "address",
+            },
+          ],
+          name: "transferOwnership",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          stateMutability: "payable",
+          type: "receive",
+        },
+      ];
+
+      function initWalletConnect() {
+        provider = new WalletConnectProvider.default({
+          rpc: {
+            84532: "https://sepolia.base.org", // Base Sepolia Testnet
+          },
+          bridge: "https://bridge.walletconnect.org",
+          qrcodeModalOptions: {
+            mobileLinks: [
+              "rainbow",
+              "metamask",
+              "argent",
+              "trust",
+              "imtoken",
+              "pillar",
+            ],
+          },
+        });
+      }
+
+      async function connectWallet() {
+        initWalletConnect();
+        await provider.enable();
+        web3 = new Web3(provider);
+
+        provider.on("accountsChanged", (accounts) => {
+          console.log("Account changed:", accounts[0]);
+          setupContracts();
+        });
+
+        provider.on("chainChanged", (chainId) => {
+          console.log("Chain changed:", chainId);
+          setupContracts();
+        });
+
+        provider.on("disconnect", (code, reason) => {
+          console.log("WalletConnect disconnected:", reason);
+          provider = null;
+        });
+
+        setupContracts();
+        connectWalletBtn.classList.add("hidden");
+        actionContainer.classList.remove("hidden");
+      }
+
+      function setupContracts() {
+        if (!web3) {
+          console.error("Web3 is not initialized. Cannot set up contracts.");
+          return;
+        }
+        shrimpFaucetContract = new web3.eth.Contract(faucetABI, faucetAddress);
+        shrimpTokenContract = new web3.eth.Contract(tokenABI, tokenAddress);
+        console.log("Contracts initialized.");
+      }
+
+      async function claimTokens() {
+        if (!web3) {
+          console.error("Web3 is not initialized. Please connect to a wallet.");
+          showMessage("Web3 is not initialized. Please connect to a wallet.");
+          return;
+        }
+
+        try {
+          const accounts = await web3.eth.getAccounts();
+          const account = accounts[0];
+          const shrimpFaucetContract = new web3.eth.Contract(
+            faucetABI,
+            faucetAddress,
+          );
+          await shrimpFaucetContract.methods
+            .claimTokens()
+            .send({ from: account });
+          showMessage("Tokens claimed successfully!");
+        } catch (error) {
+          console.error("Error claiming tokens:", error);
+          showMessage("Failed to claim tokens. See console for details.");
+        }
+      }
+
+      async function getFaucetBalance() {
+        if (!web3) {
+          console.error("Web3 is not initialized. Please connect to a wallet.");
+          showMessage("Web3 is not initialized. Please connect to a wallet.");
+          return;
+        }
+
+        try {
+          const shrimpTokenContract = new web3.eth.Contract(
+            tokenABI,
+            tokenAddress,
+          );
+          const balance = await shrimpTokenContract.methods
+            .balanceOf(faucetAddress)
+            .call();
+          showMessage(`Faucet Balance: ${balance} Shrimp Tokens`);
+        } catch (error) {
+          console.error("Error getting faucet balance:", error);
+          showMessage("Failed to get faucet balance. See console for details.");
+        }
+      }
+
+      async function getCooldownTimeRemaining() {
+        if (!web3) {
+          console.error("Web3 is not initialized. Please connect to a wallet.");
+          showMessage("Web3 is not initialized. Please connect to a wallet.");
+          return;
+        }
+
+        try {
+          const accounts = await web3.eth.getAccounts();
+          const account = accounts[0];
+          const shrimpFaucetContract = new web3.eth.Contract(
+            faucetABI,
+            faucetAddress,
+          );
+          const remainingTime = await shrimpFaucetContract.methods
+            .getCooldownTimeRemaining(account)
+            .call();
+          showMessage(`Remaining Cooldown Time: ${remainingTime} seconds`);
+        } catch (error) {
+          console.error("Error getting cooldown time:", error);
+          showMessage(
+            "Failed to get remaining cooldown time. See console for details.",
+          );
+        }
+      }
+
+      function showMessage(text) {
+        var messageContainer = document.getElementById("messageContainer");
+        var messageText = document.getElementById("messageText");
+        messageText.textContent = text;
+        messageContainer.classList.remove("hidden");
+
+        setTimeout(function () {
+          messageContainer.classList.add("hidden");
+        }, 3000); // Hide the message after 3 seconds
+      }
+    </script>
+  </body>
+</html>
