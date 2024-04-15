@@ -1,0 +1,103 @@
+body, html {
+    font-family: 'Arial', sans-serif;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    background: #121212;
+    color: #fff;
+}
+
+header {
+    width: 100%;
+    text-align: center;
+    background: #333;
+    padding: 10px 0;
+    margin-bottom: 20px;
+}
+
+h1, h2 {
+    color: #00BCD4;
+}
+
+main {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-around;
+    padding: 0 20px;
+}
+
+.info, .data-container, .actions {
+    flex: 1 1 100%;
+    margin-bottom: 20px;
+    padding: 20px;
+    border-radius: 8px;
+    background: #333;
+    box-shadow: 0 2px 15px rgba(0,0,0,0.5);
+}
+
+@media (min-width: 768px) {
+    .info, .data-container, .actions {
+        flex: 1 1 30%; /* Only apply multi-column layout for wider screens */
+    }
+}
+
+.data-box {
+    background: #424242;
+    padding: 10px;
+    border-radius: 5px;
+    margin-bottom: 10px;
+}
+
+button {
+    display: block;
+    width: 100%;
+    padding: 15px; /* Increased padding for better touch target */
+    margin-top: 10px;
+    font-size: 18px; /* Larger font size for better readability */
+    color: #fff;
+    background-color: #007BFF;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+button:hover {
+    background-color: #0056b3;
+}
+
+.message {
+    padding: 10px;
+    background-color: #ff9800;
+    color: #ffffff;
+    text-align: center;
+    border-radius: 5px;
+    position: fixed;
+    top: 20px; /* Distance from top */
+    left: 50%; /* Center horizontally */
+    transform: translateX(-50%);
+    z-index: 1000; /* Make sure it's on top */
+}
+
+.hidden {
+    display: none;
+}
+
+footer {
+    text-align: center;
+    padding: 20px 0; /* More padding for better interaction */
+    background: #333;
+    color: #fff;
+    position: fixed;
+    bottom: 0;
+    width: 100%;
+}
+
+@media (max-width: 767px) {
+    main {
+        flex-direction: column;
+    }
+
+    footer {
+        position: static; /* Avoid fixed footer on mobile for better usability */
+    }
+}
